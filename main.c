@@ -67,12 +67,13 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
-#define LEDBUTTON_BUTTON                25   
+#define LEDBUTTON_BUTTON                16   
 #define BUTTON_DETECTION_DELAY         APP_TIMER_TICKS(50)                     /**< Delay from a GPIOTE event until a button is reported as pushed (in number of timer ticks). */
+#define INIT_STA                       0
 #define LO_FREQ                        1
 #define MI_FREQ                        2
 #define HI_FREQ                        3
-static uint8_t  but_index=0;
+static uint8_t  but_index = INIT_STA;
 
 NRF_CLI_UART_DEF(m_cli_uart_transport, 0, 64, 16);
 NRF_CLI_DEF(m_cli_uart,
@@ -102,8 +103,8 @@ static void cli_init(void)
 
     nrf_drv_uart_config_t uart_config = NRF_DRV_UART_DEFAULT_CONFIG;
 
-    uart_config.pseltxd = TX_PIN_NUMBER;
-    uart_config.pselrxd = RX_PIN_NUMBER;
+    uart_config.pseltxd = TX_PIN_NUMBER; 
+    uart_config.pselrxd = RX_PIN_NUMBER; 
     uart_config.hwfc    = NRF_UART_HWFC_DISABLED;
     ret                 = nrf_cli_init(&m_cli_uart, &uart_config, true, true, NRF_LOG_SEVERITY_INFO);
     APP_ERROR_CHECK(ret);
@@ -156,33 +157,32 @@ static void button_event_handler(uint8_t pin_no, uint8_t button_action)
       {
         case LEDBUTTON_BUTTON:
            // NRF_LOG_INFO("Send button state change.");
-            but_index++;
-            if(but_index == LO_FREQ)
-            {
-             // but_index = LO_FREQ;
-              radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_0dBm, RADIO_MODE_MODE_Ble_1Mbit, 0);
-              NRF_LOG_INFO("Freq. is 2402MHz");
-            }
-            else if(but_index == MI_FREQ)
-            {
-             // but_index = MI_FREQ;
-              radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_0dBm, RADIO_MODE_MODE_Ble_1Mbit, 40);
-              NRF_LOG_INFO("Freq. is 2440MHz");
-            }
-            else if(but_index == HI_FREQ)
-            {
-              //but_index = HI_FREQ;
-              radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_0dBm, RADIO_MODE_MODE_Ble_1Mbit, 80);
-              NRF_LOG_INFO("Freq. is 2480MHz");
-              but_index = 0;
-            }
-            else 
-              but_index = 0;                        
-            break;
+           if(but_index == INIT_STA)
+           {
+              radio_tx_sweep_start(RADIO_TXPOWER_TXPOWER_Pos4dBm,RADIO_MODE_MODE_Ble_1Mbit,0,80,200);
+              but_index = LO_FREQ;
+           }
+           else if(but_index == LO_FREQ)
+           {  
+              radio_sweep_end();
+              radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_Pos4dBm, RADIO_MODE_MODE_Ble_1Mbit, 0);
+              but_index = MI_FREQ;             
+           }
+           else if(but_index == MI_FREQ)
+           {
+               radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_Pos4dBm, RADIO_MODE_MODE_Ble_1Mbit, 40);
+              but_index = HI_FREQ;
+           }
+           else if(but_index == HI_FREQ)
+           {
+              radio_unmodulated_tx_carrier(RADIO_TXPOWER_TXPOWER_Pos4dBm, RADIO_MODE_MODE_Ble_1Mbit, 80);
+              but_index = INIT_STA;
+           }                       
+           break;
 
         default:
             APP_ERROR_HANDLER(pin_no);
-             but_index = 0;  
+             but_index = INIT_STA;  
             break;
       }
     }
@@ -235,8 +235,8 @@ int main(void)
     APP_ERROR_CHECK(err_code);
     while (true)
     {
-        UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
-        nrf_cli_process(&m_cli_uart);
+         UNUSED_RETURN_VALUE(NRF_LOG_PROCESS());
+         nrf_cli_process(&m_cli_uart);
     }
 }
 
